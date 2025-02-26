@@ -2,9 +2,9 @@ name: Build AndroidMic
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
   workflow_dispatch:
 
 jobs:
@@ -12,26 +12,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
-      # Setup Java for Android build
-      - name: Set up JDK 11
+
+      # Updated to JDK 17 for Android build
+      - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
-          java-version: '11'
-          distribution: 'temurin'
+          java-version: "17"
+          distribution: "temurin"
           cache: gradle
-      
+
       # Build Android app
       - name: Grant execute permission for gradlew
         working-directory: ./Android
         run: chmod +x gradlew
-        
+
       - name: Build Android APK
         working-directory: ./Android
         run: ./gradlew assembleRelease
-      
-      # Sign APK if we have secrets configured (optional)
-      # Might show warning in the editor console, but it's fine
+
+      # Sign APK
       - name: Sign APK
         uses: r0adkll/sign-android-release@v1
         id: sign_app
@@ -45,14 +44,14 @@ jobs:
         env:
           BUILD_TOOLS_VERSION: "30.0.2"
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-      
+
       # Upload Android APK
       - name: Upload Android APK
-        uses: actions/upload-artifact@v4  # Updated to v4
+        uses: actions/upload-artifact@v4
         with:
           name: androidmic-android
           path: Android/app/build/outputs/apk/release/*.apk
-  
+
   build-rust:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -71,10 +70,17 @@ jobs:
             target: x86_64-apple-darwin
             artifact_name: androidmic-macos
             asset_name: androidmic-macos-x86_64
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
+      # Install system dependencies for Linux
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev pkg-config
+
       # Setup Rust
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
@@ -82,14 +88,14 @@ jobs:
           toolchain: stable
           target: ${{ matrix.target }}
           override: true
-      
-      # Build Rust app - fixed to use direct run command instead of action
+
+      # Build Rust app
       - name: Build Rust App
         working-directory: ./RustApp
         run: |
           cargo build --release --target ${{ matrix.target }}
-      
-      # Organize artifacts with consistent naming
+
+      # Organize artifacts
       - name: Prepare artifacts
         shell: bash
         run: |
@@ -102,7 +108,7 @@ jobs:
 
       # Upload Rust binary
       - name: Upload Rust binary
-        uses: actions/upload-artifact@v4  # Updated to v4
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: artifacts/${{ matrix.asset_name }}
@@ -111,13 +117,13 @@ jobs:
     needs: [build-android, build-rust]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-    
+
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4  # Updated to v4
+        uses: actions/download-artifact@v4
         with:
           path: all-artifacts
-        
+
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
@@ -129,13 +135,13 @@ jobs:
           files: all-artifacts/**/*
           body: |
             Automated release build of AndroidMic
-            
+
             ## What's included
             - Android APK
             - Linux x86_64 binary
             - Windows x86_64 executable
             - macOS x86_64 binary
-            
+
             Build triggered by commit: ${{ github.sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
