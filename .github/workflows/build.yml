@@ -70,16 +70,11 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install protoc
-        uses: arduino/setup-protoc@v1
-        with:
-          version: "24.4"
-
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon-dev pkg-config protobuf-compiler
+          sudo apt-get install -y libxkbcommon-dev pkg-config
 
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
