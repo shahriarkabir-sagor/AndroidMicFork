@@ -8,18 +8,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
-      # Setup Rust
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-          components: rustfmt, clippy
       
       # Setup Java for Android build
       - name: Set up JDK 11
@@ -29,15 +21,6 @@ jobs:
           distribution: 'temurin'
           cache: gradle
       
-      # Build Rust app
-      - name: Build Rust App
-        working-directory: ./RustApp
-        run: |
-          cargo build --release
-          # Create directories for artifacts
-          mkdir -p ../build/rust
-          cp target/release/androidmic ../build/rust/
-      
       # Build Android app
       - name: Grant execute permission for gradlew
         working-directory: ./Android
@@ -46,15 +29,113 @@ jobs:
       - name: Build Android APK
         working-directory: ./Android
         run: ./gradlew assembleRelease
-        
-      - name: Copy Android build artifacts
-        run: |
-          mkdir -p build/android
-          cp Android/app/build/outputs/apk/release/*.apk build/android/
       
-      # Upload all artifacts
-      - name: Upload all artifacts
+      # Sign APK if we have secrets configured (optional)
+      # Might show warning in the editor console, but it's fine
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        if: ${{ env.KEY_ALIAS != '' }}
+        with:
+          releaseDirectory: Android/app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "30.0.2"
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      
+      # Upload Android APK
+      - name: Upload Android APK
         uses: actions/upload-artifact@v3
         with:
-          name: androidmic-builds
-          path: build/
+          name: androidmic-android
+          path: Android/app/build/outputs/apk/release/*.apk
+  
+  build-rust:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: androidmic-linux
+            asset_name: androidmic-linux-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: androidmic-windows.exe
+            asset_name: androidmic-windows-x86_64.exe
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: androidmic-macos
+            asset_name: androidmic-macos-x86_64
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      # Setup Rust
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+      
+      # Build Rust app - fixed to use direct run command instead of action
+      - name: Build Rust App
+        working-directory: ./RustApp
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+      
+      # Organize artifacts with consistent naming
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp RustApp/target/${{ matrix.target }}/release/android-mic.exe artifacts/${{ matrix.asset_name }}
+          else
+            cp RustApp/target/${{ matrix.target }}/release/android-mic artifacts/${{ matrix.asset_name }}
+          fi
+
+      # Upload Rust binary
+      - name: Upload Rust binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: artifacts/${{ matrix.asset_name }}
+
+  create-release:
+    needs: [build-android, build-rust]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: all-artifacts
+        
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Release v${{ github.run_number }}
+          draft: false
+          prerelease: false
+          files: all-artifacts/**/*
+          body: |
+            Automated release build of AndroidMic
+            
+            ## What's included
+            - Android APK
+            - Linux x86_64 binary
+            - Windows x86_64 executable
+            - macOS x86_64 binary
+            
+            Build triggered by commit: ${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
