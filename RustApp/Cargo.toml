@@ -5,7 +5,6 @@ edition = "2021"
 authors = ["wiiznokes <wiiznokes2@gmail.com>"]
 license = "GPL-3.0-only"
 
-
 [package.metadata.packager]
 product_name = "AndroidMic"
 before-each-package-command = "cargo build --release"
@@ -16,6 +15,9 @@ category = "Utility"
 
 [package.metadata.packager.windows]
 allow_downgrades = true
+
+[package.metadata.packager.linux]
+icons = ["res/linux/app_icon.svg"]
 
 [lints.rust]
 dead_code = "allow"
@@ -71,14 +73,11 @@ bytes = "1.9.0"
 serde_with = "3.12.0"
 strum = { version = "0.26.3", features = ["derive"] }
 
-
 [target.'cfg(target_os = "windows")'.dependencies]
 mslnk = "0.1.8"
 
-
 [build-dependencies]
 prost-build = "0.13.3"
-
 
 [target.'cfg(target_os = "windows")'.build-dependencies]
 winres = "0.1"
