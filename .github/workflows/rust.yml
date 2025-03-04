@@ -1,0 +1,74 @@
+name: Rust Build
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "RustApp/**"
+      - ".github/workflows/rust.yml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "RustApp/**"
+      - ".github/workflows/rust.yml"
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./RustApp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libjack-jackd2-dev libxkbcommon-dev protobuf-compiler
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Run tests
+        run: cargo test --release
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-mic-linux
+          path: RustApp/target/release/android-mic
+
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ./RustApp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Windows dependencies
+        run: choco install protoc
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Run tests
+        run: cargo test --release
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-mic-windows
+          path: RustApp/target/release/android-mic.exe
