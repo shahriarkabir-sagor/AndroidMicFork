@@ -11,6 +11,7 @@ on:
     paths:
       - "RustApp/**"
       - ".github/workflows/rust.yml"
+  workflow_dispatch:
 
 jobs:
   build-linux:
